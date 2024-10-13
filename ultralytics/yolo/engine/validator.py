@@ -5,6 +5,7 @@ from collections import defaultdict
 from pathlib import Path
 
 import torch
+from click.core import batch
 from omegaconf import OmegaConf  # noqa
 from tqdm import tqdm
 
@@ -130,9 +131,14 @@ class BaseValidator:
         bar = tqdm(self.dataloader, desc, n_batches, bar_format=TQDM_BAR_FORMAT)
         self.init_metrics(de_parallel(model))
         self.jdict = []  # empty before each val
+
         for batch_i, batch in enumerate(bar):
+
             self.run_callbacks('on_val_batch_start')
+
             self.batch_i = batch_i
+            batch_ori = batch
+
             # pre-process
             with dt[0]:
                 batch = self.preprocess(batch)
@@ -150,12 +156,18 @@ class BaseValidator:
             with dt[3]:
                 preds = self.postprocess(preds)
 
-            self.update_metrics(preds, batch)
+
             if self.args.plots and batch_i < 3:
                 self.plot_val_samples(batch, batch_i)
                 self.plot_predictions(batch, preds, batch_i)
 
+
+            batch = self.preprocess(batch_ori, True)
+            self.update_metrics(preds, batch)
+
             self.run_callbacks('on_val_batch_end')
+
+
         stats = self.get_stats()
         self.check_stats(stats)
         self.print_results()
@@ -182,7 +194,7 @@ class BaseValidator:
     def get_dataloader(self, dataset_path, batch_size):
         raise NotImplementedError("get_dataloader function not implemented for this validator")
 
-    def preprocess(self, batch):
+    def preprocess(self, batch, metrics=False):
         return batch
 
     def postprocess(self, preds):

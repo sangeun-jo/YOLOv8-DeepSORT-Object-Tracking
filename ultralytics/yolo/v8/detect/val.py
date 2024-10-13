@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+import cv2
 import hydra
 import numpy as np
 import torch
@@ -28,16 +29,22 @@ class DetectionValidator(BaseValidator):
         self.iouv = torch.linspace(0.5, 0.95, 10)  # iou vector for mAP@0.5:0.95
         self.niou = self.iouv.numel()
 
-    def preprocess(self, batch):
+    def preprocess(self, batch, metric=False):
+
         batch["img"] = batch["img"].to(self.device, non_blocking=True)
         batch["img"] = (batch["img"].half() if self.args.half else batch["img"].float()) / 255
+
         for k in ["batch_idx", "cls", "bboxes"]:
             batch[k] = batch[k].to(self.device)
 
         nb, _, height, width = batch["img"].shape
-        batch["bboxes"] *= torch.tensor((width, height, width, height), device=self.device)  # to pixels
+
+        if metric:
+            batch["bboxes"] *= torch.tensor((width, height, width, height), device=self.device)  # to pixels
+
         self.lb = [torch.cat([batch["cls"], batch["bboxes"]], dim=-1)[batch["batch_idx"] == i]
                    for i in range(nb)] if self.args.save_hybrid else []  # for autolabelling
+
 
         return batch
 
